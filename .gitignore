@@ -60,3 +60,6 @@ dkms.conf
 # Build directory
 build/
 dist/ 
+
+# .txt files
+*.txt
