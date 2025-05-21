@@ -1,0 +1,297 @@
+lab 2
+In this lab, you should perform task 0 before attending the lab session. This lab may be done in pairs (as a rule, members of a pair must be in the same lab group, and should inform the TA(s)).
+Goals
+•	Get acquainted with command interpreters ("shell") by implementing a simple command interpreter.
+•	Understand how Unix/Linux fork() and exec() work.
+•	Introduction to Linux signals.
+•	Redirection, and introduction to pipes.
+•	Learn how to read the manual (man).
+
+Note
+You will be extending your code from lab 2 for use in lab C, so try make your code readable and modular.
+________________________________________
+Motivation
+Perhaps the most important system program is the command interpreter, that is, the program that gets user commands and executes them. The command interpreter is thus the major interface between the user and the operating system services. There are two main types of command interpreters:
+•	Command-line interpreters, which receive user commands in text form and execute them (also called shell in UNIX-like systems).
+•	Menu-based interpreters, where the user selects commands from a menu. At the most basic level, menus are text driven. At the most extreme end, everything is wrapped in a nifty graphical display (e.g. Windows or KDE command interpreters).
+Lab Goals
+In this sequence of labs (2 and C), you will be implementing a simple shell (command-line interpreter). Like traditional UNIX shells, your shell program will also be a user level process (just like all your programs to-date), that will rely heavily on the operating system's services. Your shell should do the following:
+•	Receive commands from the user.
+•	Interpret the commands, and use the operating system to help starting up programs and processes requested by the user.
+•	Manage process execution (e.g. run processes in the background, suspend them, etc.), using the operating system's services.
+The complicated tasks of actually starting up the processes, mapping their memory, files, etc. are strictly a responsibility of the operating system, and as such you will study these issues in the Operating Systems course. Your responsibility, therefore, is limited to telling the operating system which processes to run, how to run these processes (run in the background/foreground) etc.
+Starting and maintaining a process involves many technicalities, and like any other command interpreter we will get assistance from system calls, such as execv, fork, waitpid (see man on how to use these system calls).
+lab 2 tasks
+First, download LineParser.c and LineParser.h. These files contain some useful parsing and string management functions that will simplify your code substantially. Make sure you appropriately refer to LineParser.c in your makefile. You can find a detailed explanation in the reading material for lab 2.
+Throughout the lab pay close attention to the difference between processes(things that you run with execvp() after fork()) and shell commands. Think about when do you need a new process and when to use the process of the shell. Running things in a different process preserves inter-activeness with the shell. However, not all things can be run in a new process.
+Task 0a
+Here you are required to write a basic shell program myshell. Keep in mind that you are expected to extend this basic shell during the next tasks. In your code write an infinite loop and carry out the following:
+1.	Display a prompt - the current working directory (see man getcwd). The path name is not expected to exceed PATH_MAX (it's defined in linux/limits.h, so you'll need to include it).
+2.	Read a line from the "user", i.e. from stdin (no more than 2048 bytes). It is advisable to use fgets (see man).
+3.	Parse the input using parseCmdLines() (LineParser.h). The result is a structure cmdLine that contains all necessary parsed data.
+4.	Write a function execute(cmdLine *pCmdLine) that receives a parsed line and invokes the program specified in the cmdLine using the proper system call (see man execv).
+5.	Use perror (see man) to display an error if the execv fails, and then exit "abnormally".
+6.	Release the cmdLine resources when finished.
+7.	End the infinite loop of the shell if the command "quit" is entered in the shell, and exit the shell "normally".
+
+Once you execute your program, you will notice a few things:
+•	Although you loop infinitely, the execution ends after execv. Why is that?
+•	You must place the full path of an executable file in-order to run properly. For instance: "ls" won't work, whereas "/bin/ls" runs properly. (Why?)
+
+Now replace execv with execvp (see man) and try again .
+•	Wildcards, as in "ls *", are not working. (Again, why?)
+
+In addition to the reading material, please make sure you read up on and understand the system calls: fork(2), exec(2) and its variants, signal(2), and waitpid(2), before attending the "official" lab session.
+Task 0b
+Add the signal handler looper.c that prints the signal with a message saying it was received, and propagates the signal to the default signal handler. This is what really makes the process sleep/continue. The signals you need to address are: SIGTSTP, SIGINT, SIGCONT. The signals will be sent to the looper by the shell that you are going to write to test the functionality of the signal commands in task 3 and the process manager that you are going to implement in lab C.
+•	Use strsignal (see: man strsignal) to get the signal name.
+•	See signal(2) you will need it to set your handler to handle these signals.
+•	Use signal(signum, SIG_DFL) to make the default handler handle the signal.
+•	Use raise() to send the signal again, so that the default signal handler can handle it.
+•	After handling SIGCONT, make sure you reinstate the custom handler for SIGTSTP
+•	After handling SIGTSTP, make sure you reinstate the custom handler for SIGCONT
+
+________________________________________
+Task 1
+In this task, you will make your shell work like a real command interpreter (tasks 1a and 1b), and then add various features.
+When executed with the "-d" flag, your shell will also print the debug output to stderr (if "-d" is not given, you should not print anything to stderr).
+Task 1a
+Building up on your code from task 0, we would like our shell to remain active after invoking another program. The fork system call (see man) is the key: it 'duplicates' our process, creating an almost identical copy (child) of the issuing (parent) process. For the parent process, the call returns the process ID of the newly-born child, whereas for the child process - the value 0 is returned.
+You will need to print to stderr the following debug information in your task:
+•	PID
+•	Executing command
+Notes:
+•	Use fork to maintain the shell alive (recall mandatory lecture 2) by forking before execvp, while handling the return code appropriately (again as stated in the lecture). (Although if fork( ) fails you are in real trouble anyway (e.g. fork bomb!), so you might as well ignore this case).
+•	If execvp fails, use _exit() (see man) to terminate the process. (Why?)
+Task 1b
+Add a shell command "cd" that allows the user to change the current working directory. Essentially, you need to emulate a simplified version of the "cd" internal shell command: use chdir for that purpose (see man). No need to implement anything beyond transferring the argument of "cd" to "chdir". Print appropriate error message to stderr if the cd operation fails.
+Task 1c
+Until now we've executed commands without waiting for the process to terminate. You will now use the waitpid call (see man), in order to implement the wait. Pay attention to the blocking field in cmdLine. It is set to 0 if a "&" symbol is added at the end of the line, 1 otherwise.
+
+Invoke waitpid when you're required, and only when you're required. For example: "cat myshell.c &" will not wait for the cat process to end (cat in this case runs in the background), but "cat myshell.c" will (cat runs in the foreground).
+Task 2 - Signals
+Every program you run using the shell runs as a process. You can get a list of the running processes using the ps program (see: man 1 ps and man 2 ps). In this task we are going to implement shell commands to help manage the processes using signals. Implement and test the following commands:
+•  halt <process id> - Send a SIGSTOP signal to a process to make it "sleep".
+•  wakeup <process id> - Wake up a sleeping (stopped) process (SIGCONT).
+•  ice <process id> - Terminate a running/sleeping process (SIGINT).
+In all cases, use the kill( ) system call wrapper, see man 2 kill, to send the relevant signal to the given process id.
+
+Test your shell using your looper code from task0b in the following scenario:
+#> ./looper&
+#> ./looper&
+#> ./looper&
+#> ps
+PID TTY          TIME CMD
+17998 pts/11   00:00:00 bash
+24207 pts/11   00:00:00 task2
+24246 pts/11   00:00:00 looper
+24279 pts/11   00:00:00 looper
+24326 pts/11   00:00:00 looper
+24336 pts/11   00:00:00 ps
+#> ice 24326
+#> ps
+PID TTY          TIME CMD
+17998 pts/11   00:00:00 bash
+24207 pts/11   00:00:00 task2
+24246 pts/11   00:00:00 looper
+24279 pts/11   00:00:00 looper
+24326 pts/11   00:00:00 looper <defunct>
+24336 pts/11   00:00:00 ps
+
+Task 3: Redirection
+Add standard input/output redirection capabilities to your shell (e.g., 
+"cat < in.txt > out.txt"). Guidelines on I/O redirection can be found in the reading material.
+
+Notes:
+•	The inputRedirect and outputRedirect fields in cmdLine do the parsing work for you. They hold the redirection file names if exist, NULL otherwise.
+•	Remember to redirect input/output only in the child process. We do not want to redirect the I/O of the shell itself (parent process).
+Now that you finished tasks 1, 2, 3, save your code aside. You will need it for submission and for Lab C.
+Task 4: Exercise in Pipe System Call
+Recall from the lecture that a pipe is a pair of input stream/output stream, such that one stream feeds the other stream directly. All data that is written to one side (the "write end") can be read from the other side (the "read end"). This sort of feed becomes pretty useful when one wishes to communicate between processes, such as when implementing a shell pipe as described in the lecture. This task is to help you execise the basic pipe mechanism, towards achieving a shell pipe implementation (part of what you will be doing in lab C).
+
+Your task: Implement a simple program called mypipe (a program separate from your shell), which creates a child process, sends a message (given as argv[1] to mypipe) to the child process, closes the pipe write end, and terminates. The child then prints the incoming message and terminates. Use the pipe system call (see man) to create the pipe.
+Deliverables: lab 2
+Tasks 1, 2, 3, 4 must be completed during the regular lab. The deliverables must be submitted until the end of the lab session.
+You must submit 2 source files:
+The first one is the shell including task 1,2, 3. Name it myshell.c
+The second one is mypipe.c (task 4).
+Also, submit a makefile that compile both of them, that is: running "make myshell" should generate the "myshell" executable, and "make mypipe" should generate the "mypipe" executable
+
+Submission instructions
+•	Create a zip file with the relevant files (only) (named either [student-id-num].zip [student1-id-num_student2-id-num.zip] in case of pair submission).
+•	Upload zip file to the submission system.
+•	Download the zip file from the submission system and extract its content to an empty folder.
+•	Compile and test the code to make sure that it still works.
+
+
+
+
+
+Lab C
+Lab C builds on top of the code infrastructure of the "shell" from lab 2. Naturally, you are expected to use the code you wrote for lab 2 in this lab, and extend it. This do-at-home lab may be done in pairs.
+Motivation
+In this lab you will enrich the set of capabilities of your shell by adding job control, pipes, and history. Note that all parts below, except for part 1, are features that should be added to your shell as one program (in however many C functions you wish), that supports all these features.
+Part 0: preparation
+History
+Check out the "history" mechanism in the Linux shell. For example, see this link and try it out in a Linux shell.
+Reexamine your command interpreter (shell) code from lab 2, and if not done so before, reorganize it to be as modular and extensible as possible,
+Lab C Parts
+Part 1: An Exercise in Pipes
+Note
+This part is independent of the shell, and a preparation for implementing a pipe command in the shell. You should not use the LineParser functions in this task, nor read any command lines. However, you need to declare an array of "strings" containing all of the arguments and ending with 0 to pass to execvp() just like the one returned by parseCmdLines().
+
+Here we wish to explore the implementation of a pipeline. In order to achieve such a pipeline, one has to create a pipe and properly redirect the standard output and standard input of processes.
+Please refer to the 'Introduction to Pipelines' section in the reading material.
+
+Your task: Write a short program called mypipeline which creates a pipeline of 2 child processes. Essentially, you will implement the shell command line "ls -ls | wc".
+(A question: what does "ls -ls" do, what does "wc" do, and what should their combination produce?)
+
+Follow the given steps as closely as possible to avoid synchronization problems:
+1.	Create a pipe.
+2.	Fork a first child process (child1).
+3.	In the child1 process:
+1.	Close the standard output.
+2.	Duplicate the write-end of the pipe using dup (see man).
+3.	Close all redundant file descriptors: the file descriptor that was duplicated, and the read-end of the pipe.
+4.	Execute "ls -ls".
+4.	In the parent process: Close the write end of the pipe.
+5.	Fork a second child process (child2).
+6.	In the child2 process:
+1.	Close the standard input.
+2.	Duplicate the read-end of the pipe using dup.
+3.	Close all redundant file descriptors: the file descriptor that was duplicated
+4.	Execute "wc".
+7.	In the parent process: Close the read end of the pipe.
+8.	Now wait for the child processes to terminate, in the same order of their execution.
+After implementing the above code, debug and test it as follows: Compile and run the code and make sure it does what it is supposed to do, by adding debug messages printed to stderr as follows:
+o	In the parent process:
+	Before forking, "(parent_process>forking…)"
+	After forking, "(parent_process>created process with id: )"
+	Before closing the write end of the pipe, "(parent_process>closing the write end of the pipe…)"
+	Before closing the read end of the pipe, "(parent_process>closing the read end of the pipe…)"
+	Before waiting for child processes to terminate, "(parent_process>waiting for child processes to terminate…)"
+	Before exiting, "(parent_process>exiting…)"
+o	In the 1st child process:
+	"(child1>redirecting stdout to the write end of the pipe…)"
+	"(child1>going to execute cmd: …)"
+o	In the 2nd child process:
+	"(child2>redirecting stdin to the read end of the pipe…)"
+	"(child2>going to execute cmd: …)"
+3.	How does the following affect your program:
+1.	Comment out step 4 in your code (i.e. on the parent process:do not Close the write end of the pipe). Compile and run your code. (Also: see "man 7 pipe")
+2.	Undo the change from the last step. Comment out step 7 in your code. Compile and run your code.
+3.	Undo the change from the last step. Comment out step 4 and step 8 in your code. Compile and run your code.
+ 
+Part 2: Implementing a Pipe in the Shell
+Having learned how to create a pipe between 2 processes/programs in Part 1, we now wish to implement a pipeline inside our own shell. In this part you will extend your shell's capabilities to support pipelines that consist of just one pipe and 2 child processes. That is, support a command line with one pipe between 2 processes resulting from running executable files mentioned in the command line. The scheme uses basically the same mechanism as in part 1, except that now the program to be executed in each child process is determined by the command line.
+Your shell must be able now to run commands like: ls|wc -l which basically counts the number of files/directories under the current working dir. The most important thing to remember about pipes is that the write-end of the pipe needs to be closed in all processes, otherwise the read-end of the pipe will not receive EOF, unless the main process terminates.
+Notes:
+•	The line parser automatically generates a list of cmdLine structures to accommodate pipelines. For instance, when parsing the command "ls | grep .c", two chained cmdLine structures are created, representing ls and grep respectively.
+•	Your shell must still support all previous features, including input/output redirection from lab 2. Obviously, it makes no sense to redirect the output of the left--hand-side process (as then nothing goes into the pipe), and this should be considered an error, and likewise redirecting the input of the right-hand-side process is an error (as then the pipe output is hanging). In such cases, print an error message to stderr without generating any new processes. It is important to note that commands utilizing both I/O redirection and pipelines are indeed quite common (e.g. "cat < in.txt | tail -n 2 > out.txt").
+•	As in previous tasks, you must keep your program free of memory leaks.
+Part 3: Process Manager
+Every program you run using the shell runs as a process. You can get a list of the running processes using the ps program (see: man 1 ps and man 2 ps). In this task we are going to add to your shell an internal "process manager" to manage the process we run in our shell (everything you fork). The process manager will provide 4 operations (note that the last 3 you already mostly implemented in lab 2):
+•	procs - prints current processes including sleeping, running, and "freshly" terminated processes.
+•	wakeup <process id> - wakes up a sleeping process (SIGCONT).
+•	halt <process id> - suspends a running process (SIGSTOP).
+•	ice <process id> - terminates a running/sleeping process (SIGINT).
+
+
+Part 3a - Process List
+In this part we will create and print a list of all processes that have been forked by your shell.
+
+Representation
+Create a linked list to store information about running/suspended processes. Each node in the list is a struct process:
+    typedef struct process{
+        cmdLine* cmd;                         /* the parsed command line*/
+        pid_t pid; 		                  /* the process id that is running the command*/
+        int status;                           /* status of the process: RUNNING/SUSPENDED/TERMINATED */
+        struct process *next;	                  /* next process in chain */
+    } process;
+    
+The field status can have one of the following values:
+    #define TERMINATED  -1
+    #define RUNNING 1
+    #define SUSPENDED 0
+    
+Implementation
+Implement the following functions that create and print the process list:
+•	void addProcess(process** process_list, cmdLine* cmd, pid_t pid);: Receive a process list (process_list), a command (cmd), and the process id (pid) of the process running the command. Note that process_list is a pointer to a pointer so that we can insert at the beginning of the list if we wish.
+•	void printProcessList(process** process_list);: print the processes.
+•	Add support for the command procs to the shell which prints processes using printProcessList()in the following format:
+<index in process list> <process id> <process status> <the command together with its arguments>
+Example:
+
+    #> sleep 3  # foreground, takes 3 seconds until we get prompt back
+    #> procs
+    PID          Command      STATUS
+    14952        sleep        Terminated
+    #> 
+    #> sleep 5& # background, we get prompt back immediately
+    #> procs
+    PID          Command      STATUS
+    14962        sleep        Running
+    #> # Wait for the process to finish
+    #> 
+    #> procs
+    PID          Command      STATUS
+    14962        sleep        Terminated
+    
+Part 3b - Updating the Process List
+Implement the following to add some functionality to your process list:
+•	void freeProcessList(process* process_list);: free all memory allocated for the process list.
+•	void updateProcessList(process **process_list);: go over the process list, and for each process check if it is done, you can use waitpid with the option WNOHANG. WNOHANG does not block the calling process, the process returns from the call to waitpid immediately. If no process with the given process id exists, then waitpid returns -1.
+In order to learn if a process was stopped (SIGTSTOP), resumed (SIGCONT) or terminated (SIGINT), It's highly essential you read and understand how to use waitpid(2) before implementing this function
+•	void updateProcessStatus(process* process_list, int pid, int status): find the process with the given id in the process_list and change its status to the received status.
+•	update void printProcessList(process** process_list);:
+o	Run updateProcessList() at the beginning of the function.
+o	If a process was "freshly" terminated, delete it after printing it (meaning print the list with the updated status, then delete the dead processes).
+Part 3c - Manipulating the Processes
+In this part you add to your shell process manipulation commands, one of the following (some you already implemented in lab 2):
+•	halt <process id> - suspends a running process. Send SIGTSTOP to the respective process. This is similar to typing CTRL-Z in the shell when running the process.
+•	ice <process id> - terminates a running/sleeping process. Send SIGINT to the respective process. This is similar to typing CTRL-C in the shell when running a process.
+•	wakeup <process id> - wakes up a sleeping process. Send SIGCONT to the respective process. This is similar to typing fg in a standard shell, right after typing CTRL-Z.
+
+Use kill(), see man 2 kill, to send the relevant signal to the given process id. Check if kill() succeeded and print an appropriate message. Remember to update the status of the process in the process_list.
+
+Test your shell using your looper code from task0b in the following scenario:
+    #> ./looper&
+    #> ./looper&
+    #> ./looper&
+    #> procs
+    PID         Command     STATUS
+    18170       ./looper    Running
+    18171       ./looper    Running
+    18174       ./looper    Running
+    #> ice 18170
+    #> Looper handling SIGINT       # Message from the child process
+    
+    #> halt 18174
+    #> Looper handling SIGTSTP      # Message from the child process    
+    procs
+    PID         Command     STATUS
+    18170       ./looper    Terminated
+    18171       ./looper    Running
+    18174       ./looper    Suspended
+    #> wakeup 18174
+    #> Looper handling SIGCONT      # Message from the child process
+    
+    #> wakeup 18171   # What will happen to the process? (it is already running)
+    #> Looper handling SIGCONT      # Message from the child process
+    procs
+    PID         Command     STATUS
+    18171       ./looper    Running
+    18174       ./looper    Running
+    
+    
+Part 4: Adding the History Mechanism
+Here you will add a history mechanism to your shell. The history mechanism works as follows. Your shell should keep HISTLEN previous command lines in a queue, where HISTLEN is a constant with a value of 20 as a default. The history list is maintained in a linked list of size HISTLEN of pointers to (copies of) previous commands. Note that you need to allocate space for these copies. Also note that you should keep the UNPARSED command lines in the history list, and NOT the parsed version.
+When a new command line is entered after the history list is full (already has HISTLEN entries), delete the oldest entry from the beginning of the list and insert the new one at the end of the list. You should implement these operations in O(1) by keeping pointers to the beginning and end of the list.
+The user can now perform the following functions as a shell command (not a process!):
+•	"hist": print the history list (number of entry in the list and the appropriate command line), for all entries.
+•	"!!": retrieve the last command line (non-history, for clarification please refer to lab reading material) CL, enter CL again into the queue, and execute it (needs to be parsed again!).
+•	"!n": With n a number between 1 and the current lenght of the history list, as in "!!" except with CL being the command line at history index n. If n is an invalid number (out of range, or no such entry yet) print an error message to stdout and ignore this command line.
+Note that your shell should support history on top of all the other features: pipes, redirection, etc. This should not be hard if your code is well-designed.
+Submission
+Submit a zip file (named either [student-id-num].zip [student1-id-num_student2-id-num.zip] in case of pair submission) with the following files: mypipeline.c that implements the stand-alone pipe from part 1, and myshell.c, the source code of a shell supporting all features from lab 2 and from this lab (parts 2,3,4) and a makefile to compile and link them into the executables "mypipeline" and "myshell", respectively.
+
